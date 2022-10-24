@@ -90,7 +90,7 @@ s3.listObjects(bucketParams, function (err, data) {
     }
     else {
         var objList_1 = data.Contents
-            .filter(function (obj) { return obj.Size < 1e6; }) // test cut
+            // .filter((obj) => obj.Size < 10e6) // test cut
             .map(function (obj) { return obj.Key; });
         // .slice(0, 10000); // test cut
         console.log("Object list recieved: ".concat(objList_1.length, " objects."));

@@ -107,7 +107,7 @@ s3.listObjects(bucketParams, function (err, data) {
       console.log("Error", err);
    } else {
       let objList: string[] = data.Contents
-         .filter((obj) => obj.Size < 1e6) // test cut
+         // .filter((obj) => obj.Size < 10e6) // test cut
          .map((obj) => obj.Key);
          // .slice(0, 10000); // test cut
 
