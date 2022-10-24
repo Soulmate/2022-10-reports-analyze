@@ -107,9 +107,9 @@ s3.listObjects(bucketParams, function (err, data) {
       console.log("Error", err);
    } else {
       let objList: string[] = data.Contents
-         .filter((obj) => obj.Size < 100000) // test cut
+         // .filter((obj) => obj.Size < 100000) // test cut
          .map((obj) => obj.Key)
-         .slice(0, 10); // test cut
+         // .slice(0, 10); // test cut
 
       console.log(`Object list recieved: ${objList.length} objects.`);
 
@@ -132,7 +132,7 @@ s3.listObjects(bucketParams, function (err, data) {
                   histogramWeightSize.AddPoint(src_last_modified, src_size);
                })
                .on('end', function () {
-                  console.log(`${reportIndex}\tloaded\t${migrationId}`);
+                  console.log(`${reportIndex}/${objList.length}\tloaded\t${migrationId}`);
                   resolve(reportIndex);
                   reportIndex++;
                })
@@ -143,7 +143,7 @@ s3.listObjects(bucketParams, function (err, data) {
          const convertToDateFunction = (bin) => new Date(bin)
             .toLocaleString("en-US", { year: 'numeric', month: 'numeric', day: 'numeric', })
 
-         console.log(histogramWithoutWeight.ToString(convertToDateFunction));
+         // console.log(histogramWithoutWeight.ToString(convertToDateFunction));
 
          histogramWithoutWeight.SaveToFile('output_histogramWithoutWeight_datenum.dat');
          histogramWithoutWeight.SaveToFile('output_histogramWithoutWeight.dat', convertToDateFunction);

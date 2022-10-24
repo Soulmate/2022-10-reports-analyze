@@ -89,12 +89,12 @@ s3.listObjects(bucketParams, function (err, data) {
         console.log("Error", err);
     }
     else {
-        var objList = data.Contents
-            .filter(function (obj) { return obj.Size < 100000; }) // test cut
-            .map(function (obj) { return obj.Key; })
-            .slice(0, 10); // test cut
-        console.log("Object list recieved: ".concat(objList.length, " objects."));
-        var promises = objList.map(function (fileKey) {
+        var objList_1 = data.Contents
+            // .filter((obj) => obj.Size < 100000) // test cut
+            .map(function (obj) { return obj.Key; });
+        // .slice(0, 10); // test cut
+        console.log("Object list recieved: ".concat(objList_1.length, " objects."));
+        var promises = objList_1.map(function (fileKey) {
             return new Promise(function (resolve, reject) {
                 var migrationId = +fileKey.split('/')[1];
                 var options = {
@@ -110,7 +110,7 @@ s3.listObjects(bucketParams, function (err, data) {
                     histogramWeightSize.AddPoint(src_last_modified, src_size);
                 })
                     .on('end', function () {
-                    console.log("".concat(reportIndex, "\tloaded\t").concat(migrationId));
+                    console.log("".concat(reportIndex, "/").concat(objList_1.length, "\tloaded\t").concat(migrationId));
                     resolve(reportIndex);
                     reportIndex++;
                 });
@@ -119,7 +119,7 @@ s3.listObjects(bucketParams, function (err, data) {
         Promise.all(promises).then(function (result) {
             var convertToDateFunction = function (bin) { return new Date(bin)
                 .toLocaleString("en-US", { year: 'numeric', month: 'numeric', day: 'numeric', }); };
-            console.log(histogramWithoutWeight.ToString(convertToDateFunction));
+            // console.log(histogramWithoutWeight.ToString(convertToDateFunction));
             histogramWithoutWeight.SaveToFile('output_histogramWithoutWeight_datenum.dat');
             histogramWithoutWeight.SaveToFile('output_histogramWithoutWeight.dat', convertToDateFunction);
             histogramWeightSize.SaveToFile('output_histogramWeightSize_datenum.dat');
