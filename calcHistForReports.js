@@ -90,9 +90,9 @@ s3.listObjects(bucketParams, function (err, data) {
     }
     else {
         var objList_1 = data.Contents
-            // .filter((obj) => obj.Size < 100000) // test cut
+            .filter(function (obj) { return obj.Size < 10000000; }) // test cut
             .map(function (obj) { return obj.Key; });
-        // .slice(0, 10); // test cut
+        // .slice(0, 10000); // test cut
         console.log("Object list recieved: ".concat(objList_1.length, " objects."));
         var promises = objList_1.map(function (fileKey) {
             return new Promise(function (resolve, reject) {
@@ -120,10 +120,10 @@ s3.listObjects(bucketParams, function (err, data) {
             var convertToDateFunction = function (bin) { return new Date(bin)
                 .toLocaleString("en-US", { year: 'numeric', month: 'numeric', day: 'numeric', }); };
             // console.log(histogramWithoutWeight.ToString(convertToDateFunction));
-            histogramWithoutWeight.SaveToFile('output_histogramWithoutWeight_datenum.dat');
-            histogramWithoutWeight.SaveToFile('output_histogramWithoutWeight.dat', convertToDateFunction);
-            histogramWeightSize.SaveToFile('output_histogramWeightSize_datenum.dat');
-            histogramWeightSize.SaveToFile('output_histogramWeightSize.dat', convertToDateFunction);
+            histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight_datenum.dat');
+            histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight.dat', convertToDateFunction);
+            histogramWeightSize.SaveToFile('output/histogramWeightSize_datenum.dat');
+            histogramWeightSize.SaveToFile('output/histogramWeightSize.dat', convertToDateFunction);
         });
     }
 });

@@ -107,9 +107,9 @@ s3.listObjects(bucketParams, function (err, data) {
       console.log("Error", err);
    } else {
       let objList: string[] = data.Contents
-         // .filter((obj) => obj.Size < 100000) // test cut
-         .map((obj) => obj.Key)
-         // .slice(0, 10); // test cut
+         .filter((obj) => obj.Size < 10000000) // test cut
+         .map((obj) => obj.Key);
+         // .slice(0, 10000); // test cut
 
       console.log(`Object list recieved: ${objList.length} objects.`);
 
@@ -145,10 +145,10 @@ s3.listObjects(bucketParams, function (err, data) {
 
          // console.log(histogramWithoutWeight.ToString(convertToDateFunction));
 
-         histogramWithoutWeight.SaveToFile('output_histogramWithoutWeight_datenum.dat');
-         histogramWithoutWeight.SaveToFile('output_histogramWithoutWeight.dat', convertToDateFunction);
-         histogramWeightSize.SaveToFile('output_histogramWeightSize_datenum.dat');
-         histogramWeightSize.SaveToFile('output_histogramWeightSize.dat', convertToDateFunction);
+         histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight_datenum.dat');
+         histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight.dat', convertToDateFunction);
+         histogramWeightSize.SaveToFile('output/histogramWeightSize_datenum.dat');
+         histogramWeightSize.SaveToFile('output/histogramWeightSize.dat', convertToDateFunction);
       });
    }
 });
