@@ -1,89 +1,8 @@
-import * as fs from "fs";
 import { parse } from 'csv-parse';
+import { rejects } from "assert";
+import { Histogram } from "./Histogram";
 
-
-class Histogram {
-   minValue: number;
-   maxValue: number;
-   binSize: number;
-   binCount: number;
-
-   binCenters: number[] = [];
-   binEdges: number[] = [];
-
-   data: number[];
-   dataLower: number = 0; // что что выше верхней границы
-   dataUpper: number = 0; // что что ниже нижней границы
-
-   constructor(minValue: number, maxValue: number,
-      binSize: number) {
-      if (binSize <= 0 || maxValue - minValue < binSize) {
-         throw ('binSize error');
-      }
-      this.minValue = minValue;
-      this.maxValue = maxValue;
-      this.binSize = binSize;
-
-      this.binCount = Math.floor((this.maxValue - this.minValue) / this.binSize);
-
-      for (let i = 0; i < this.binCount; i++) {
-         this.binEdges.push(this.minValue + i * this.binSize);
-         this.binCenters.push(this.minValue + i * this.binSize + this.binSize / 2);
-      }
-      this.binEdges.push(this.minValue + this.binCount * this.binSize);
-
-      this.data = new Array(this.binCount).fill(0);
-   }
-
-   GetBinNumber(value: number): number {
-      return Math.floor((value - this.minValue) / this.binSize);
-   }
-
-   AddPoint(value: number, weight: number = 1): void {
-      const binNumber = this.GetBinNumber(value);
-      if (binNumber < 0) {
-         this.dataLower += weight;
-         return;
-      }
-      if (binNumber >= this.binCount) {
-         this.dataUpper += weight;
-         return;
-      }
-      this.data[binNumber] += weight;
-   }
-
-   ToString(binConvertFunction = (bin) => bin) {
-      let resultArray: string[] = [];
-      resultArray.push(
-         `${binConvertFunction(NaN)}\t` +
-         `${binConvertFunction(NaN)}\t` +
-         `${binConvertFunction(this.binEdges[0])}\t` +
-         `${this.dataLower}`);
-      for (let i = 0; i < this.binCount; i++) {
-         resultArray.push(
-            `${binConvertFunction(this.binCenters[i])}\t` +
-            `${binConvertFunction(this.binEdges[i])}\t` +
-            `${binConvertFunction(this.binEdges[i + 1])}\t` +
-            `${this.data[i]}`);
-      }
-      resultArray.push(
-         `${binConvertFunction(NaN)}\t` +
-         `${binConvertFunction(this.binEdges[this.binCount])}\t` +
-         `${binConvertFunction(NaN)}\t` +
-         `${this.dataUpper}`);
-      return resultArray.join('\n');
-   }
-
-   SaveToFile(filePath: string, binConvertFunction = (bin) => bin) {
-      fs.writeFile(filePath, this.ToString(binConvertFunction), (err) => {
-         if (err)
-            console.log(err);
-         else {
-            console.log(`File written successfully ${filePath}\n`);
-         }
-      });
-   }
-}
+const TEST_CUT = true; // pick only part of objects
 
 // hist initialize
 const binSizeDays = 10;
@@ -92,63 +11,94 @@ const dateTo = Date.now();
 const histogramWithoutWeight = new Histogram(dateFrom, dateTo, binSizeDays * 24 * 60 * 60 * 1000);
 const histogramWeightSize = new Histogram(dateFrom, dateTo, binSizeDays * 24 * 60 * 60 * 1000);
 
-let reportIndex = 0; //для счетчтика
+let reportIndex = 0; // for counter
 
-// AWS
+// AWS initialize
 var AWS = require('aws-sdk');
 AWS.config.update({ region: 'us-east-1' });
 let s3 = new AWS.S3({ apiVersion: '2006-03-01' });
 const BUCKET_NAME = 'fl-prod-migration-reports';
-var bucketParams = {
-   Bucket: BUCKET_NAME,
-};
-s3.listObjects(bucketParams, function (err, data) {
-   if (err) {
-      console.log("Error", err);
-   } else {
-      let objList: string[] = data.Contents
-         // .filter((obj) => obj.Size < 10e6) // test cut
-         .map((obj) => obj.Key);
-         // .slice(0, 10000); // test cut
+const listAllKeys = (params, out = []) => new Promise((resolve, reject) => {
+   s3.listObjectsV2(params).promise()
+      .then(({ Contents, IsTruncated, NextContinuationToken }) => {
+         out.push(...Contents);
+         console.log(`Found ${out.length} objects`);
 
-      console.log(`Object list recieved: ${objList.length} objects.`);
+         if (TEST_CUT && out.length > 2000) {
+            resolve(out);
+            return;
+         }
 
-      const promises = objList.map((fileKey) =>
-         new Promise((resolve, reject) => {
-            const migrationId: number = +fileKey.split('/')[1];
-
-            var options = {
-               Bucket: BUCKET_NAME,
-               Key: fileKey,
-            };
-
-            s3.getObject(options).createReadStream()
-               .pipe(parse({ delimiter: ',', from: 2 }))
-               .on('data', function (row) {
-                  let src_size: number = +row[4]; // src size
-                  let src_last_modified: number = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT 
-
-                  histogramWithoutWeight.AddPoint(src_last_modified);
-                  histogramWeightSize.AddPoint(src_last_modified, src_size);
-               })
-               .on('end', function () {
-                  console.log(`${reportIndex}/${objList.length}\tloaded\t${migrationId}`);
-                  resolve(reportIndex);
-                  reportIndex++;
-               })
-         })
-      );
-
-      Promise.all(promises).then((result) => {
-         const convertToDateFunction = (bin) => new Date(bin)
-            .toLocaleString("en-US", { year: 'numeric', month: 'numeric', day: 'numeric', })
-
-         // console.log(histogramWithoutWeight.ToString(convertToDateFunction));
-
-         histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight_datenum.dat');
-         histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight.dat', convertToDateFunction);
-         histogramWeightSize.SaveToFile('output/histogramWeightSize_datenum.dat');
-         histogramWeightSize.SaveToFile('output/histogramWeightSize.dat', convertToDateFunction);
-      });
-   }
+         !IsTruncated ? resolve(out) : resolve(listAllKeys(Object.assign(params, { ContinuationToken: NextContinuationToken }), out));
+      })
+      .catch(reject);
 });
+
+async function DownloadAndAnalyzeAllObjects() {
+   let contents:any[] = await listAllKeys({ Bucket: BUCKET_NAME });
+
+   if (TEST_CUT) {
+      contents = contents
+         .filter((obj) => obj.Size < 0.1 * 1e6)
+         .slice(0, 100)
+   }
+
+   let objList: string[] = contents.map((obj) => obj.Key);
+
+   console.log(`Object list received: ${objList.length} objects.`);
+
+   const promises = objList.map((fileKey) => DownloadAndAnalyzeObject(fileKey));
+
+   const SAVE_EVERY_N = 100;
+   for (let i = SAVE_EVERY_N; i < promises.length; i += SAVE_EVERY_N) {
+      promises[i].then(SaveResults())
+   }
+   //ADD SAVES 
+
+   return Promise.all(promises);
+}
+
+async function DownloadAndAnalyzeObject(fileKey) {
+   const migrationId: number = +fileKey.split('/')[1];
+
+   var options = {
+      Bucket: BUCKET_NAME,
+      Key: fileKey,
+   };
+
+   s3.getObject(options).createReadStream()
+      .pipe(parse({ delimiter: ',', from: 2 }))
+      .on('data', function (row) {
+         let src_size: number = +row[4]; // src size
+         let src_last_modified: number = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT 
+         AddDataToHistograms(src_last_modified, src_size);
+      })
+      .on('end', function () {
+         reportIndex++;
+         // console.log(`${reportIndex}/${objList.length}\tloaded\t${migrationId}`);
+         return ({ reportIndex, migrationId });
+      })
+}
+
+function AddDataToHistograms(src_last_modified: number, src_size: number) {
+   histogramWithoutWeight.AddPoint(src_last_modified);
+   histogramWeightSize.AddPoint(src_last_modified, src_size);
+}
+
+async function SaveResults() {
+   const convertToDateFunction = (bin) => new Date(bin)
+      .toLocaleString("en-US", { year: 'numeric', month: 'numeric', day: 'numeric', });
+
+   // console.log(histogramWithoutWeight.ToString(convertToDateFunction));
+
+   console.log('Saving results:');
+   await histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight_datenum.dat');
+   await histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight.dat', convertToDateFunction);
+   await histogramWeightSize.SaveToFile('output/histogramWeightSize_datenum.dat');
+   await histogramWeightSize.SaveToFile('output/histogramWeightSize.dat', convertToDateFunction);
+}
+
+
+
+
+DownloadAndAnalyzeAllObjects();
