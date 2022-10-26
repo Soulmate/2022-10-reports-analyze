@@ -40,15 +40,45 @@ var csv_parse_1 = require("csv-parse");
 var Histogram_1 = require("./Histogram");
 var TEST_CUT = false; // pick only part of objects
 var SAVE_EVERY_N = 100; // every Nth object save current historgams
+var MS_IN_DAY = 24 * 60 * 60 * 1000;
+var CURRENT_TIME_STAMP = Date.now();
 // hist initialize
-var binSizeDays = 10;
-var dateFrom = Date.parse('00:00:00 2000-01-01 GMT');
-var dateTo = Date.now();
-var histogramWithoutWeight = new Histogram_1.Histogram(dateFrom, dateTo, binSizeDays * 24 * 60 * 60 * 1000);
-var histogramWeightSize = new Histogram_1.Histogram(dateFrom, dateTo, binSizeDays * 24 * 60 * 60 * 1000);
-function AddDataToHistograms(src_last_modified, src_size) {
-    histogramWithoutWeight.AddPoint(src_last_modified);
-    histogramWeightSize.AddPoint(src_last_modified, src_size);
+var binSizeDays = 7;
+var maxAgeDays = 20 * 365; // maximum age of objects
+var histAgeDaysAtNowObjNumber = new Histogram_1.Histogram(0, maxAgeDays, binSizeDays);
+var histAgeDaysAtMigrationObjNumber = new Histogram_1.Histogram(0, maxAgeDays, binSizeDays);
+var histAgeDaysAtNowSize = new Histogram_1.Histogram(0, maxAgeDays, binSizeDays);
+var histAgeDaysAtMigrationSize = new Histogram_1.Histogram(0, maxAgeDays, binSizeDays);
+function AddDataToHistograms(src_last_modified_timestamp, src_size, migration_timestamp) {
+    var objAgeDaysAtNow = (CURRENT_TIME_STAMP - src_last_modified_timestamp) / MS_IN_DAY;
+    var objAgeDaysAtMigration = (migration_timestamp - src_last_modified_timestamp) / MS_IN_DAY;
+    histAgeDaysAtNowObjNumber.AddPoint(objAgeDaysAtNow);
+    histAgeDaysAtMigrationObjNumber.AddPoint(objAgeDaysAtMigration);
+    histAgeDaysAtNowSize.AddPoint(objAgeDaysAtNow, src_size);
+    histAgeDaysAtMigrationSize.AddPoint(objAgeDaysAtMigration, src_size);
+}
+function SaveHistograms() {
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    console.log('Saving histograms:');
+                    return [4 /*yield*/, histAgeDaysAtNowObjNumber.SaveToFile('output/histAgeDaysAtNowObjNumber.dat')];
+                case 1:
+                    _a.sent();
+                    return [4 /*yield*/, histAgeDaysAtMigrationObjNumber.SaveToFile('output/histAgeDaysAtMigrationObjNumber.dat')];
+                case 2:
+                    _a.sent();
+                    return [4 /*yield*/, histAgeDaysAtNowSize.SaveToFile('output/histAgeDaysAtNowSize.dat')];
+                case 3:
+                    _a.sent();
+                    return [4 /*yield*/, histAgeDaysAtMigrationSize.SaveToFile('output/histAgeDaysAtMigrationSize.dat')];
+                case 4:
+                    _a.sent();
+                    return [2 /*return*/];
+            }
+        });
+    });
 }
 // AWS initialize
 var AWS = require('aws-sdk');
@@ -74,37 +104,35 @@ var listAllKeys = function (params, out) {
 };
 function DownloadAndAnalyzeAllObjects() {
     return __awaiter(this, void 0, void 0, function () {
-        var contents, objList, i, fileKey_1, migrationId_1;
+        var reportsList, i, migrationId_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0: return [4 /*yield*/, listAllKeys({ Bucket: BUCKET_NAME })];
                 case 1:
-                    contents = _a.sent();
+                    reportsList = _a.sent();
                     if (TEST_CUT) {
-                        contents = contents
+                        reportsList = reportsList
                             .filter(function (obj) { return obj.Size < 0.1 * 1e6; })
                             .slice(0, 100);
                     }
-                    objList = contents.map(function (obj) { return obj.Key; });
-                    console.log("Object list received: ".concat(objList.length, " objects."));
+                    console.log("Object list received: ".concat(reportsList.length, " objects."));
                     i = 0;
                     _a.label = 2;
                 case 2:
-                    if (!(i < objList.length)) return [3 /*break*/, 6];
-                    fileKey_1 = objList[i];
-                    return [4 /*yield*/, DownloadAndAnalyzeObject(fileKey_1)];
+                    if (!(i < reportsList.length)) return [3 /*break*/, 6];
+                    return [4 /*yield*/, DownloadAndAnalyzeObject(reportsList[i])];
                 case 3:
                     migrationId_1 = _a.sent();
-                    console.log("".concat(new Date(), "\t").concat(i, "/").concat(objList.length, "\tloaded migrationId\t").concat(migrationId_1));
+                    console.log("".concat(new Date(), "\t").concat(i, "/").concat(reportsList.length, "\tloaded migrationId\t").concat(migrationId_1));
                     if (!(i % SAVE_EVERY_N == 0)) return [3 /*break*/, 5];
-                    return [4 /*yield*/, SaveResults()];
+                    return [4 /*yield*/, SaveHistograms()];
                 case 4:
                     _a.sent();
                     _a.label = 5;
                 case 5:
                     i++;
                     return [3 /*break*/, 2];
-                case 6: return [4 /*yield*/, SaveResults()];
+                case 6: return [4 /*yield*/, SaveHistograms()];
                 case 7:
                     _a.sent();
                     return [2 /*return*/];
@@ -112,24 +140,26 @@ function DownloadAndAnalyzeAllObjects() {
         });
     });
 }
-function DownloadAndAnalyzeObject(fileKey) {
+function DownloadAndAnalyzeObject(report) {
     return __awaiter(this, void 0, void 0, function () {
-        var migrationId, options;
+        var objKey, migration_timestamp, migrationId, options;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    migrationId = +fileKey.split('/')[1];
+                    objKey = report.Key;
+                    migration_timestamp = report.LastModified;
+                    migrationId = +objKey.split('/')[1];
                     options = {
                         Bucket: BUCKET_NAME,
-                        Key: fileKey,
+                        Key: objKey,
                     };
                     return [4 /*yield*/, new Promise(function (resolve, reject) {
                             s3.getObject(options).createReadStream()
                                 .pipe((0, csv_parse_1.parse)({ delimiter: ',', from: 2 }))
                                 .on('data', function (row) {
                                 var src_size = +row[4]; // src size
-                                var src_last_modified = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT 
-                                AddDataToHistograms(src_last_modified, src_size);
+                                var src_last_modified = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT             
+                                AddDataToHistograms(src_last_modified, src_size, migration_timestamp);
                             })
                                 .on('end', function () {
                                 resolve(migrationId);
@@ -137,32 +167,6 @@ function DownloadAndAnalyzeObject(fileKey) {
                                 .on('error', reject);
                         })];
                 case 1: return [2 /*return*/, _a.sent()];
-            }
-        });
-    });
-}
-function SaveResults() {
-    return __awaiter(this, void 0, void 0, function () {
-        var convertToDateFunction;
-        return __generator(this, function (_a) {
-            switch (_a.label) {
-                case 0:
-                    convertToDateFunction = function (bin) { return new Date(bin)
-                        .toLocaleString("en-US", { year: 'numeric', month: 'numeric', day: 'numeric', }); };
-                    console.log('Saving results:');
-                    return [4 /*yield*/, histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight_datenum.dat')];
-                case 1:
-                    _a.sent();
-                    return [4 /*yield*/, histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight.dat', convertToDateFunction)];
-                case 2:
-                    _a.sent();
-                    return [4 /*yield*/, histogramWeightSize.SaveToFile('output/histogramWeightSize_datenum.dat')];
-                case 3:
-                    _a.sent();
-                    return [4 /*yield*/, histogramWeightSize.SaveToFile('output/histogramWeightSize.dat', convertToDateFunction)];
-                case 4:
-                    _a.sent();
-                    return [2 /*return*/];
             }
         });
     });

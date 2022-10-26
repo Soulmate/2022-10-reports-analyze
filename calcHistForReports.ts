@@ -2,17 +2,35 @@ import { parse } from 'csv-parse';
 import { Histogram } from "./Histogram";
 
 const TEST_CUT = false; // pick only part of objects
+
+
 const SAVE_EVERY_N = 100; // every Nth object save current historgams
+const MS_IN_DAY = 24 * 60 * 60 * 1000;
+const CURRENT_TIME_STAMP = Date.now();
 
 // hist initialize
-const binSizeDays = 10;
-const dateFrom = Date.parse('00:00:00 2000-01-01 GMT');
-const dateTo = Date.now();
-const histogramWithoutWeight = new Histogram(dateFrom, dateTo, binSizeDays * 24 * 60 * 60 * 1000);
-const histogramWeightSize = new Histogram(dateFrom, dateTo, binSizeDays * 24 * 60 * 60 * 1000);
-function AddDataToHistograms(src_last_modified: number, src_size: number) {
-   histogramWithoutWeight.AddPoint(src_last_modified);
-   histogramWeightSize.AddPoint(src_last_modified, src_size);
+const binSizeDays = 7;
+const maxAgeDays = 20 * 365; // maximum age of objects
+const histAgeDaysAtNowObjNumber = new Histogram(0, maxAgeDays, binSizeDays);
+const histAgeDaysAtMigrationObjNumber = new Histogram(0, maxAgeDays, binSizeDays);
+const histAgeDaysAtNowSize = new Histogram(0, maxAgeDays, binSizeDays);
+const histAgeDaysAtMigrationSize = new Histogram(0, maxAgeDays, binSizeDays);
+
+function AddDataToHistograms(src_last_modified_timestamp: number, src_size: number, migration_timestamp: number) {   
+   let objAgeDaysAtNow:number = (CURRENT_TIME_STAMP - src_last_modified_timestamp) / MS_IN_DAY;
+   let objAgeDaysAtMigration:number = (migration_timestamp - src_last_modified_timestamp) / MS_IN_DAY;   
+   histAgeDaysAtNowObjNumber.AddPoint(objAgeDaysAtNow);
+   histAgeDaysAtMigrationObjNumber.AddPoint(objAgeDaysAtMigration);
+   histAgeDaysAtNowSize.AddPoint(objAgeDaysAtNow, src_size);
+   histAgeDaysAtMigrationSize.AddPoint(objAgeDaysAtMigration, src_size);
+}
+
+async function SaveHistograms() {
+   console.log('Saving histograms:');
+   await histAgeDaysAtNowObjNumber.SaveToFile('output/histAgeDaysAtNowObjNumber.dat');
+   await histAgeDaysAtMigrationObjNumber.SaveToFile('output/histAgeDaysAtMigrationObjNumber.dat');
+   await histAgeDaysAtNowSize.SaveToFile('output/histAgeDaysAtNowSize.dat');
+   await histAgeDaysAtMigrationSize.SaveToFile('output/histAgeDaysAtMigrationSize.dat');
 }
 
 // AWS initialize
@@ -37,34 +55,35 @@ const listAllKeys = (params, out = []) => new Promise((resolve, reject) => {
 });
 
 async function DownloadAndAnalyzeAllObjects() {
-   let contents: any[] = await listAllKeys({ Bucket: BUCKET_NAME }) as any[];
+   let reportsList: any[] = await listAllKeys({ Bucket: BUCKET_NAME }) as any[];
    if (TEST_CUT) {
-      contents = contents
+      reportsList = reportsList
          .filter((obj) => obj.Size < 0.1 * 1e6)
          .slice(0, 100)
-   }
-   let objList: string[] = contents.map((obj) => obj.Key);
-   console.log(`Object list received: ${objList.length} objects.`);
+   }   
+   console.log(`Object list received: ${reportsList.length} objects.`);
 
-   for (let i = 0; i < objList.length; i++) {
-      let fileKey: string = objList[i];
-      let migrationId = await DownloadAndAnalyzeObject(fileKey);
-      console.log(`${new Date()}\t${i}/${objList.length}\tloaded migrationId\t${migrationId}`);
+   for (let i = 0; i < reportsList.length; i++) {
+      let migrationId = await DownloadAndAnalyzeObject(reportsList[i]);
+      console.log(`${new Date()}\t${i}/${reportsList.length}\tloaded migrationId\t${migrationId}`);
       if (i % SAVE_EVERY_N == 0) {
-         await SaveResults();
+         await SaveHistograms();
       }
    }
 
-   await SaveResults();
+   await SaveHistograms();
 }
 
-async function DownloadAndAnalyzeObject(fileKey) {
-   // console.log(`Downloading fileKey ${fileKey}`);
-   const migrationId: number = +fileKey.split('/')[1];
+async function DownloadAndAnalyzeObject(report) {
+   const objKey = report.Key;
+   const migration_timestamp = report.LastModified;   
+   const migrationId: number = +objKey.split('/')[1];
+
+   // console.log(`Downloading ${objKey} ${migration_timestamp} ${migrationId}`);
 
    var options = {
       Bucket: BUCKET_NAME,
-      Key: fileKey,
+      Key: objKey,
    };
 
    return await new Promise(function (resolve, reject) {
@@ -72,25 +91,14 @@ async function DownloadAndAnalyzeObject(fileKey) {
          .pipe(parse({ delimiter: ',', from: 2 }))
          .on('data', function (row) {
             let src_size: number = +row[4]; // src size
-            let src_last_modified: number = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT 
-            AddDataToHistograms(src_last_modified, src_size);
+            let src_last_modified: number = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT             
+            AddDataToHistograms(src_last_modified, src_size,migration_timestamp);
          })
          .on('end', function () {
             resolve(migrationId);
          })
          .on('error', reject);
    });
-}
-
-async function SaveResults() {
-   const convertToDateFunction = (bin) => new Date(bin)
-      .toLocaleString("en-US", { year: 'numeric', month: 'numeric', day: 'numeric', });
-
-   console.log('Saving results:');
-   await histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight_datenum.dat');
-   await histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight.dat', convertToDateFunction);
-   await histogramWeightSize.SaveToFile('output/histogramWeightSize_datenum.dat');
-   await histogramWeightSize.SaveToFile('output/histogramWeightSize.dat', convertToDateFunction);
 }
 
 DownloadAndAnalyzeAllObjects();
