@@ -104,7 +104,7 @@ var Histogram = /** @class */ (function () {
                         throw new Error("writeFile error");
                     }
                     else {
-                        console.log("File written successfully ".concat(filePath, "\n"));
+                        console.log("File written successfully ".concat(filePath));
                         (0, path_1.resolve)();
                     }
                 });

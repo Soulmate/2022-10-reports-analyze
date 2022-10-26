@@ -80,7 +80,7 @@ export class Histogram {
             throw new Error("writeFile error");
          }
          else {
-            console.log(`File written successfully ${filePath}\n`);
+            console.log(`File written successfully ${filePath}`);
             resolve();
          }
       });

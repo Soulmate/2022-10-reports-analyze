@@ -38,14 +38,18 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var csv_parse_1 = require("csv-parse");
 var Histogram_1 = require("./Histogram");
-var TEST_CUT = true; // pick only part of objects
+var TEST_CUT = false; // pick only part of objects
+var SAVE_EVERY_N = 100; // every Nth object save current historgams
 // hist initialize
 var binSizeDays = 10;
 var dateFrom = Date.parse('00:00:00 2000-01-01 GMT');
 var dateTo = Date.now();
 var histogramWithoutWeight = new Histogram_1.Histogram(dateFrom, dateTo, binSizeDays * 24 * 60 * 60 * 1000);
 var histogramWeightSize = new Histogram_1.Histogram(dateFrom, dateTo, binSizeDays * 24 * 60 * 60 * 1000);
-var reportIndex = 0; // for counter
+function AddDataToHistograms(src_last_modified, src_size) {
+    histogramWithoutWeight.AddPoint(src_last_modified);
+    histogramWeightSize.AddPoint(src_last_modified, src_size);
+}
 // AWS initialize
 var AWS = require('aws-sdk');
 AWS.config.update({ region: 'us-east-1' });
@@ -59,7 +63,7 @@ var listAllKeys = function (params, out) {
             var Contents = _a.Contents, IsTruncated = _a.IsTruncated, NextContinuationToken = _a.NextContinuationToken;
             out.push.apply(out, Contents);
             console.log("Found ".concat(out.length, " objects"));
-            if (TEST_CUT && out.length > 2000) {
+            if (TEST_CUT && out.length > 100) {
                 resolve(out);
                 return;
             }
@@ -70,7 +74,7 @@ var listAllKeys = function (params, out) {
 };
 function DownloadAndAnalyzeAllObjects() {
     return __awaiter(this, void 0, void 0, function () {
-        var contents, objList, promises, SAVE_EVERY_N, i;
+        var contents, objList, i, fileKey_1, migrationId_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0: return [4 /*yield*/, listAllKeys({ Bucket: BUCKET_NAME })];
@@ -83,13 +87,27 @@ function DownloadAndAnalyzeAllObjects() {
                     }
                     objList = contents.map(function (obj) { return obj.Key; });
                     console.log("Object list received: ".concat(objList.length, " objects."));
-                    promises = objList.map(function (fileKey) { return DownloadAndAnalyzeObject(fileKey); });
-                    SAVE_EVERY_N = 100;
-                    for (i = SAVE_EVERY_N; i < promises.length; i += SAVE_EVERY_N) {
-                        promises[i].then(SaveResults());
-                    }
-                    //ADD SAVES 
-                    return [2 /*return*/, Promise.all(promises)];
+                    i = 0;
+                    _a.label = 2;
+                case 2:
+                    if (!(i < objList.length)) return [3 /*break*/, 6];
+                    fileKey_1 = objList[i];
+                    return [4 /*yield*/, DownloadAndAnalyzeObject(fileKey_1)];
+                case 3:
+                    migrationId_1 = _a.sent();
+                    console.log("".concat(new Date(), "\t").concat(i, "/").concat(objList.length, "\tloaded migrationId\t").concat(migrationId_1));
+                    if (!(i % SAVE_EVERY_N == 0)) return [3 /*break*/, 5];
+                    return [4 /*yield*/, SaveResults()];
+                case 4:
+                    _a.sent();
+                    _a.label = 5;
+                case 5:
+                    i++;
+                    return [3 /*break*/, 2];
+                case 6: return [4 /*yield*/, SaveResults()];
+                case 7:
+                    _a.sent();
+                    return [2 /*return*/];
             }
         });
     });
@@ -98,30 +116,30 @@ function DownloadAndAnalyzeObject(fileKey) {
     return __awaiter(this, void 0, void 0, function () {
         var migrationId, options;
         return __generator(this, function (_a) {
-            migrationId = +fileKey.split('/')[1];
-            options = {
-                Bucket: BUCKET_NAME,
-                Key: fileKey,
-            };
-            s3.getObject(options).createReadStream()
-                .pipe((0, csv_parse_1.parse)({ delimiter: ',', from: 2 }))
-                .on('data', function (row) {
-                var src_size = +row[4]; // src size
-                var src_last_modified = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT 
-                AddDataToHistograms(src_last_modified, src_size);
-            })
-                .on('end', function () {
-                reportIndex++;
-                // console.log(`${reportIndex}/${objList.length}\tloaded\t${migrationId}`);
-                return ({ reportIndex: reportIndex, migrationId: migrationId });
-            });
-            return [2 /*return*/];
+            switch (_a.label) {
+                case 0:
+                    migrationId = +fileKey.split('/')[1];
+                    options = {
+                        Bucket: BUCKET_NAME,
+                        Key: fileKey,
+                    };
+                    return [4 /*yield*/, new Promise(function (resolve, reject) {
+                            s3.getObject(options).createReadStream()
+                                .pipe((0, csv_parse_1.parse)({ delimiter: ',', from: 2 }))
+                                .on('data', function (row) {
+                                var src_size = +row[4]; // src size
+                                var src_last_modified = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT 
+                                AddDataToHistograms(src_last_modified, src_size);
+                            })
+                                .on('end', function () {
+                                resolve(migrationId);
+                            })
+                                .on('error', reject);
+                        })];
+                case 1: return [2 /*return*/, _a.sent()];
+            }
         });
     });
-}
-function AddDataToHistograms(src_last_modified, src_size) {
-    histogramWithoutWeight.AddPoint(src_last_modified);
-    histogramWeightSize.AddPoint(src_last_modified, src_size);
 }
 function SaveResults() {
     return __awaiter(this, void 0, void 0, function () {
@@ -131,7 +149,6 @@ function SaveResults() {
                 case 0:
                     convertToDateFunction = function (bin) { return new Date(bin)
                         .toLocaleString("en-US", { year: 'numeric', month: 'numeric', day: 'numeric', }); };
-                    // console.log(histogramWithoutWeight.ToString(convertToDateFunction));
                     console.log('Saving results:');
                     return [4 /*yield*/, histogramWithoutWeight.SaveToFile('output/histogramWithoutWeight_datenum.dat')];
                 case 1:
