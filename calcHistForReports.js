@@ -110,7 +110,7 @@ var listAllKeys = function (params, out) {
 };
 function DownloadAndAnalyzeAllObjects() {
     return __awaiter(this, void 0, void 0, function () {
-        var reportsList, cachedListAllKeys, i, migrationId_1;
+        var reportsList, cachedListAllKeys, i, migrationId;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -140,8 +140,8 @@ function DownloadAndAnalyzeAllObjects() {
                     if (!(i < reportsList.length)) return [3 /*break*/, 8];
                     return [4 /*yield*/, DownloadAndAnalyzeObject(reportsList[i])];
                 case 5:
-                    migrationId_1 = _a.sent();
-                    console.log("".concat(new Date(), "\t").concat(i, "/").concat(reportsList.length, "\tloaded migrationId\t").concat(migrationId_1));
+                    migrationId = _a.sent();
+                    console.log("".concat(new Date(), "\t").concat(i, "/").concat(reportsList.length, "\tloaded migrationId\t").concat(migrationId));
                     if (!(i % SAVE_EVERY_N == 0)) return [3 /*break*/, 7];
                     return [4 /*yield*/, SaveHistograms()];
                 case 6:
