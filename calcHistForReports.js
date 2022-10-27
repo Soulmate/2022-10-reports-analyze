@@ -201,6 +201,7 @@ function DownloadAndAnalyzeObject(report) {
                                 }
                                 switch (decision) {
                                     case 'copy':
+                                    case 'move':
                                         break;
                                     case 'skip due to rules':
                                     case 'skip due to hash match':

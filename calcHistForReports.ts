@@ -112,11 +112,11 @@ async function DownloadAndAnalyzeObject(report) {
       s3.getObject(options).createReadStream()
          .pipe(parse({ delimiter: ',', from: 2 }))
          .on('data', function (row) {
-            let migration_type:string = row[2];
+            let migration_type: string = row[2];
             let src_size: number = +row[4]; // src size
             let src_last_modified: number = Date.parse(row[6]); // format: 12:17:24 2022-07-15 GMT                    
-            let decision:string = row[32];
-            let result:string = row[33];
+            let decision: string = row[32];
+            let result: string = row[33];
 
             switch (migration_type) {
                case 'single':
@@ -140,6 +140,7 @@ async function DownloadAndAnalyzeObject(report) {
 
             switch (decision) {
                case 'copy':
+               case 'move':
                   break;
                case 'skip due to rules':
                case 'skip due to hash match':
