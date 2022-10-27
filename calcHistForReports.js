@@ -42,6 +42,9 @@ var TEST_CUT = false; // pick only part of objects
 var SAVE_EVERY_N = 100; // every Nth object save current historgams
 var MS_IN_DAY = 24 * 60 * 60 * 1000;
 var CURRENT_TIME_STAMP = Date.now();
+var unknownValuesOfMigrationType = new Set();
+var unknownValuesOfDecision = new Set();
+var unknownValuesOfResult = new Set();
 // hist initialize
 var binSizeDays = 7;
 var maxAgeDays = 20 * 365; // maximum age of objects
@@ -80,6 +83,9 @@ function SaveHistograms() {
         });
     });
 }
+// cache for list of reports
+var flatCache = require('flat-cache');
+var cache = flatCache.load('listAllKeys');
 // AWS initialize
 var AWS = require('aws-sdk');
 AWS.config.update({ region: 'us-east-1' });
@@ -104,12 +110,24 @@ var listAllKeys = function (params, out) {
 };
 function DownloadAndAnalyzeAllObjects() {
     return __awaiter(this, void 0, void 0, function () {
-        var reportsList, i, migrationId_1;
+        var reportsList, cachedListAllKeys, i, migrationId_1;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, listAllKeys({ Bucket: BUCKET_NAME })];
+                case 0:
+                    cachedListAllKeys = cache.getKey('reportsList');
+                    if (!cachedListAllKeys) return [3 /*break*/, 1];
+                    console.log('reportsList loaded from cache');
+                    reportsList = cache.getKey('reportsList');
+                    return [3 /*break*/, 3];
                 case 1:
-                    reportsList = _a.sent();
+                    console.log('No cached reportsList');
+                    return [4 /*yield*/, listAllKeys({ Bucket: BUCKET_NAME })];
+                case 2:
+                    reportsList = (_a.sent());
+                    cache.setKey('reportsList', reportsList);
+                    cache.save();
+                    _a.label = 3;
+                case 3:
                     if (TEST_CUT) {
                         reportsList = reportsList
                             .filter(function (obj) { return obj.Size < 0.1 * 1e6; })
@@ -117,23 +135,23 @@ function DownloadAndAnalyzeAllObjects() {
                     }
                     console.log("Object list received: ".concat(reportsList.length, " objects."));
                     i = 0;
-                    _a.label = 2;
-                case 2:
-                    if (!(i < reportsList.length)) return [3 /*break*/, 6];
+                    _a.label = 4;
+                case 4:
+                    if (!(i < reportsList.length)) return [3 /*break*/, 8];
                     return [4 /*yield*/, DownloadAndAnalyzeObject(reportsList[i])];
-                case 3:
+                case 5:
                     migrationId_1 = _a.sent();
                     console.log("".concat(new Date(), "\t").concat(i, "/").concat(reportsList.length, "\tloaded migrationId\t").concat(migrationId_1));
-                    if (!(i % SAVE_EVERY_N == 0)) return [3 /*break*/, 5];
+                    if (!(i % SAVE_EVERY_N == 0)) return [3 /*break*/, 7];
                     return [4 /*yield*/, SaveHistograms()];
-                case 4:
+                case 6:
                     _a.sent();
-                    _a.label = 5;
-                case 5:
-                    i++;
-                    return [3 /*break*/, 2];
-                case 6: return [4 /*yield*/, SaveHistograms()];
+                    _a.label = 7;
                 case 7:
+                    i++;
+                    return [3 /*break*/, 4];
+                case 8: return [4 /*yield*/, SaveHistograms()];
+                case 9:
                     _a.sent();
                     return [2 /*return*/];
             }
@@ -157,8 +175,53 @@ function DownloadAndAnalyzeObject(report) {
                             s3.getObject(options).createReadStream()
                                 .pipe((0, csv_parse_1.parse)({ delimiter: ',', from: 2 }))
                                 .on('data', function (row) {
+                                var migration_type = row[2];
                                 var src_size = +row[4]; // src size
-                                var src_last_modified = Date.parse(row[6]); // src last modified 12:17:24 2022-07-15 GMT             
+                                var src_last_modified = Date.parse(row[6]); // format: 12:17:24 2022-07-15 GMT                    
+                                var decision = row[32];
+                                var result = row[33];
+                                switch (migration_type) {
+                                    case 'single':
+                                    case 'multi part':
+                                        break;
+                                    case 'number of part':
+                                        return;
+                                    case '':
+                                        if (decision.startsWith('skip')) {
+                                            return;
+                                        }
+                                        else {
+                                            console.log('!unknown migration_type and decision', row);
+                                            return;
+                                        }
+                                    default:
+                                        unknownValuesOfMigrationType.add(migration_type);
+                                        console.log('!unknown migration_type', migration_type, unknownValuesOfMigrationType, row, objKey);
+                                        return;
+                                }
+                                switch (decision) {
+                                    case 'copy':
+                                        break;
+                                    case 'skip due to rules':
+                                    case 'skip due to hash match':
+                                    case 'skip due to newer versions':
+                                    case 'undefined':
+                                        return;
+                                    default:
+                                        unknownValuesOfDecision.add(decision);
+                                        console.log('!unknown decision', decision, unknownValuesOfDecision);
+                                        return;
+                                }
+                                switch (result) {
+                                    case 'success':
+                                        break;
+                                    case 'failure':
+                                        return;
+                                    default:
+                                        unknownValuesOfResult.add(result);
+                                        console.log('!unknown result', result, unknownValuesOfResult);
+                                        return;
+                                }
                                 AddDataToHistograms(src_last_modified, src_size, migration_timestamp);
                             })
                                 .on('end', function () {
