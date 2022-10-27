@@ -59,6 +59,7 @@ function AddDataToHistograms(src_last_modified_timestamp, src_size, migration_ti
     histAgeDaysAtMigrationObjNumber.AddPoint(objAgeDaysAtMigration);
     histAgeDaysAtNowSize.AddPoint(objAgeDaysAtNow, src_size);
     histAgeDaysAtMigrationSize.AddPoint(objAgeDaysAtMigration, src_size);
+    // console.log({src_last_modified_timestamp, src_size, migration_timestamp, objAgeDaysAtNow, objAgeDaysAtMigration});
 }
 function SaveHistograms() {
     return __awaiter(this, void 0, void 0, function () {
@@ -165,7 +166,7 @@ function DownloadAndAnalyzeObject(report) {
             switch (_a.label) {
                 case 0:
                     objKey = report.Key;
-                    migration_timestamp = report.LastModified;
+                    migration_timestamp = Date.parse(report.LastModified);
                     migrationId = +objKey.split('/')[1];
                     options = {
                         Bucket: BUCKET_NAME,
@@ -206,6 +207,7 @@ function DownloadAndAnalyzeObject(report) {
                                     case 'skip due to rules':
                                     case 'skip due to hash match':
                                     case 'skip due to newer versions':
+                                    case 'skipped disappeared':
                                     case 'undefined':
                                         return;
                                     default:
