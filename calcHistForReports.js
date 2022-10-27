@@ -191,7 +191,7 @@ function DownloadAndAnalyzeObject(report) {
                                             return;
                                         }
                                         else {
-                                            console.log('!unknown migration_type and decision', row);
+                                            console.log('!unknown migration_type and decision', migration_type, {}, row, objKey);
                                             return;
                                         }
                                     default:
