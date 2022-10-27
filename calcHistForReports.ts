@@ -176,4 +176,10 @@ async function DownloadAndAnalyzeObject(report) {
    });
 }
 
+var fs = require('fs');
+var dir = './output';
+if (!fs.existsSync(dir)){
+    fs.mkdirSync(dir);
+}
+
 DownloadAndAnalyzeAllObjects();
