@@ -148,6 +148,7 @@ async function DownloadAndAnalyzeObject(report) {
                case 'skip due to hash match':
                case 'skip due to newer versions':
                case 'skipped disappeared':
+               case 'skip due to glacier':
                case 'undefined':
                   return;
                default:
@@ -178,8 +179,8 @@ async function DownloadAndAnalyzeObject(report) {
 
 var fs = require('fs');
 var dir = './output';
-if (!fs.existsSync(dir)){
-    fs.mkdirSync(dir);
+if (!fs.existsSync(dir)) {
+   fs.mkdirSync(dir);
 }
 
 DownloadAndAnalyzeAllObjects();

@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npx tsc && node distr/calcHistForReports | tee output/log.txt"
+    "start": "tsc && node distr/calcHistForReports | tee output/log.txt"
   },
   "keywords": [],
   "author": "",
