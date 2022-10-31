@@ -114,11 +114,10 @@ async function DownloadAndAnalyzeAllObjects() {
       let migrationId = await DownloadAndAnalyzeObject(reportsList[i]);
 
       // console.log(`${new Date()}\t${i}/${reportsList.length}\tloaded migrationId\t${migrationId}`);
-
-      fs.writeFileSync('output/lastProcessedReport.txt', String(lastProcessedReport));
-
+      
       if (i % SAVE_EVERY_N == 0) {
          SaveHistograms();
+         fs.writeFileSync('output/lastProcessedReport.txt', String(i));
       }
    }
 
