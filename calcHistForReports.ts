@@ -114,7 +114,7 @@ async function DownloadAndAnalyzeAllObjects() {
       let migrationId = await DownloadAndAnalyzeObject(reportsList[i]);
 
       // console.log(`${new Date()}\t${i}/${reportsList.length}\tloaded migrationId\t${migrationId}`);
-      
+
       if (i % SAVE_EVERY_N == 0) {
          SaveHistograms();
          fs.writeFileSync('output/lastProcessedReport.txt', String(i));
@@ -137,71 +137,76 @@ async function DownloadAndAnalyzeObject(report) {
       Key: objKey,
    };
 
-   return await new Promise(function (resolve, reject) {
-      s3.getObject(options).createReadStream()
-         .pipe(parse({ delimiter: ',', from: 2 }))
-         .on('data', function (row) {
-            let migration_type: string = row[2];
-            let src_size: number = +row[4]; // src size
-            let src_last_modified: number = Date.parse(row[6]); // format: 12:17:24 2022-07-15 GMT                    
-            let decision: string = row[32];
-            let result: string = row[33];
+   try {
+      return await new Promise(function (resolve, reject) {
+         s3.getObject(options).createReadStream()
+            .pipe(parse({ delimiter: ',', from: 2 }))
+            .on('data', function (row) {
+               let migration_type: string = row[2];
+               let src_size: number = +row[4]; // src size
+               let src_last_modified: number = Date.parse(row[6]); // format: 12:17:24 2022-07-15 GMT                    
+               let decision: string = row[32];
+               let result: string = row[33];
 
-            switch (migration_type) {
-               case 'single':
-               case 'multi part':
-                  break;
-               case 'number of part':
-                  return;
-               case '':
-                  if (decision.startsWith('skip')) {
+               switch (migration_type) {
+                  case 'single':
+                  case 'multi part':
+                     break;
+                  case 'number of part':
                      return;
-                  }
-                  else {
-                     console.log('!unknown migration_type and decision', migration_type, {}, row, objKey);
+                  case '':
+                     if (decision.startsWith('skip')) {
+                        return;
+                     }
+                     else {
+                        console.log('!unknown migration_type and decision', migration_type, {}, row, objKey);
+                        return;
+                     }
+                  default:
+                     unknownValuesOfMigrationType.add(migration_type);
+                     console.log('!unknown migration_type', migration_type, unknownValuesOfMigrationType, row, objKey);
                      return;
-                  }
-               default:
-                  unknownValuesOfMigrationType.add(migration_type);
-                  console.log('!unknown migration_type', migration_type, unknownValuesOfMigrationType, row, objKey);
-                  return;
-            }
+               }
 
-            switch (decision) {
-               case 'copy':
-               case 'move':
-                  break;
-               case 'skip due to rules':
-               case 'skip due to hash match':
-               case 'skip due to newer versions':
-               case 'skipped disappeared':
-               case 'skip due to glacier':
-               case 'undefined':
-                  return;
-               default:
-                  unknownValuesOfDecision.add(decision);
-                  console.log('!unknown decision', decision, unknownValuesOfDecision);
-                  return;
-            }
+               switch (decision) {
+                  case 'copy':
+                  case 'move':
+                     break;
+                  case 'skip due to rules':
+                  case 'skip due to hash match':
+                  case 'skip due to newer versions':
+                  case 'skipped disappeared':
+                  case 'skip due to glacier':
+                  case 'undefined':
+                     return;
+                  default:
+                     unknownValuesOfDecision.add(decision);
+                     console.log('!unknown decision', decision, unknownValuesOfDecision);
+                     return;
+               }
 
-            switch (result) {
-               case 'success':
-                  break;
-               case 'failure':
-                  return;
-               default:
-                  unknownValuesOfResult.add(result);
-                  console.log('!unknown result', result, unknownValuesOfResult);
-                  return;
-            }
+               switch (result) {
+                  case 'success':
+                     break;
+                  case 'failure':
+                     return;
+                  default:
+                     unknownValuesOfResult.add(result);
+                     console.log('!unknown result', result, unknownValuesOfResult);
+                     return;
+               }
 
-            AddDataToHistograms(src_last_modified, src_size, migration_timestamp);
-         })
-         .on('end', function () {
-            resolve(migrationId);
-         })
-         .on('error', reject);
-   });
+               AddDataToHistograms(src_last_modified, src_size, migration_timestamp);
+            })
+            .on('end', function () {
+               resolve(migrationId);
+            })
+            .on('error', reject);
+      });
+   }
+   catch (err) {
+      console.log('Error parsing report, skipped:', err);
+   }
 }
 
 var dir = './output';
