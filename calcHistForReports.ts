@@ -1,6 +1,8 @@
 import { parse } from 'csv-parse';
 import { Histogram } from "./Histogram";
 
+const fs = require('fs');
+
 const TEST_CUT = false; // pick only part of objects
 
 
@@ -30,12 +32,21 @@ function AddDataToHistograms(src_last_modified_timestamp: number, src_size: numb
    // console.log({src_last_modified_timestamp, src_size, migration_timestamp, objAgeDaysAtNow, objAgeDaysAtMigration});
 }
 
-async function SaveHistograms() {
+function SaveHistograms() {
    console.log('Saving histograms:');
-   await histAgeDaysAtNowObjNumber.SaveToFile('output/histAgeDaysAtNowObjNumber.dat');
-   await histAgeDaysAtMigrationObjNumber.SaveToFile('output/histAgeDaysAtMigrationObjNumber.dat');
-   await histAgeDaysAtNowSize.SaveToFile('output/histAgeDaysAtNowSize.dat');
-   await histAgeDaysAtMigrationSize.SaveToFile('output/histAgeDaysAtMigrationSize.dat');
+   histAgeDaysAtNowObjNumber.SaveToFile('output/histAgeDaysAtNowObjNumber.dat');
+   histAgeDaysAtMigrationObjNumber.SaveToFile('output/histAgeDaysAtMigrationObjNumber.dat');
+   histAgeDaysAtNowSize.SaveToFile('output/histAgeDaysAtNowSize.dat');
+   histAgeDaysAtMigrationSize.SaveToFile('output/histAgeDaysAtMigrationSize.dat');
+}
+
+function LoadHistograms() {
+   console.log('Loading histograms:');
+   histAgeDaysAtNowObjNumber.LoadFromFile('output/histAgeDaysAtNowObjNumber.dat');
+   histAgeDaysAtMigrationObjNumber.LoadFromFile('output/histAgeDaysAtMigrationObjNumber.dat');
+   histAgeDaysAtNowSize.LoadFromFile('output/histAgeDaysAtNowSize.dat');
+   histAgeDaysAtMigrationSize.LoadFromFile('output/histAgeDaysAtMigrationSize.dat');
+   console.log('Loading histograms done');
 }
 
 // cache for list of reports
@@ -86,15 +97,32 @@ async function DownloadAndAnalyzeAllObjects() {
 
    console.log(`Object list received: ${reportsList.length} objects.`);
 
-   for (let i = 0; i < reportsList.length; i++) {
+   let lastProcessedReport: number;
+   try {
+      lastProcessedReport = +(fs.readFileSync('output/lastProcessedReport.txt'));
+      console.log('loaded lastProcessedReport.txt: ', lastProcessedReport);
+      LoadHistograms();
+   }
+   catch {
+      console.log('lastProcessedReport.txt now found, starting anew');
+      lastProcessedReport = -1;
+   }
+
+   for (let i = lastProcessedReport + 1; i < reportsList.length; i++) {
+      console.log(`${new Date()}\t${i}/${reportsList.length}\tloading\t${reportsList[i].Size / 1000} Kb\t${reportsList[i].Key}`);
+
       let migrationId = await DownloadAndAnalyzeObject(reportsList[i]);
-      console.log(`${new Date()}\t${i}/${reportsList.length}\tloaded migrationId\t${migrationId}`);
+
+      // console.log(`${new Date()}\t${i}/${reportsList.length}\tloaded migrationId\t${migrationId}`);
+
+      fs.writeFileSync('output/lastProcessedReport.txt', String(lastProcessedReport));
+
       if (i % SAVE_EVERY_N == 0) {
-         await SaveHistograms();
+         SaveHistograms();
       }
    }
 
-   await SaveHistograms();
+   SaveHistograms();
 }
 
 async function DownloadAndAnalyzeObject(report) {
@@ -177,7 +205,6 @@ async function DownloadAndAnalyzeObject(report) {
    });
 }
 
-var fs = require('fs');
 var dir = './output';
 if (!fs.existsSync(dir)) {
    fs.mkdirSync(dir);

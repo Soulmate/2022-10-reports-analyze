@@ -51,38 +51,54 @@ export class Histogram {
       this.data[binNumber] += weight;
    }
 
-   ToString(binConvertFunction = (bin) => bin) {
+   ToString() {
       let resultArray: string[] = [];
       resultArray.push(
-         `${binConvertFunction(NaN)}\t` +
-         `${binConvertFunction(NaN)}\t` +
-         `${binConvertFunction(this.binEdges[0])}\t` +
+         `${(NaN)}\t` +
+         `${(NaN)}\t` +
+         `${(this.binEdges[0])}\t` +
          `${this.dataLower}`);
       for (let i = 0; i < this.binCount; i++) {
          resultArray.push(
-            `${binConvertFunction(this.binCenters[i])}\t` +
-            `${binConvertFunction(this.binEdges[i])}\t` +
-            `${binConvertFunction(this.binEdges[i + 1])}\t` +
+            `${(this.binCenters[i])}\t` +
+            `${(this.binEdges[i])}\t` +
+            `${(this.binEdges[i + 1])}\t` +
             `${this.data[i]}`);
       }
       resultArray.push(
-         `${binConvertFunction(NaN)}\t` +
-         `${binConvertFunction(this.binEdges[this.binCount])}\t` +
-         `${binConvertFunction(NaN)}\t` +
+         `${(NaN)}\t` +
+         `${(this.binEdges[this.binCount])}\t` +
+         `${(NaN)}\t` +
          `${this.dataUpper}`);
       return resultArray.join('\n');
    }
 
-   async SaveToFile(filePath: string, binConvertFunction = (bin) => bin) {
-      fs.writeFile(filePath, this.ToString(binConvertFunction), (err) => {
-         if (err) {
-            console.log(err);
-            throw new Error("writeFile error");
-         }
-         else {
-            console.log(`File written successfully ${filePath}`);
-            resolve();
-         }
-      });
+   FromString(s: string) {
+      const resultArray: string[] = s.split('\n');
+      const dataLower: number = +resultArray.shift().split('\t')[3];
+      const dataUpper: number = +resultArray.pop().split('\t')[3];
+      const data: number[] = resultArray.map((row) => +row.split('\t')[3]);
+      if (data.length != this.binCenters.length) {
+         throw ('Invalid input string: ' + s);
+      }
+      this.data = data;
+      this.dataLower = dataLower;
+      this.dataUpper = dataUpper;
+   }
+
+   async SaveToFile(filePath: string) {
+      try {
+         fs.writeFileSync(filePath, this.ToString());
+         console.log(`File written successfully ${filePath}`);
+      }
+      catch (err) {
+         console.log(err);
+         throw new Error("writeFile error");
+      }
+   }
+
+   async LoadFromFile(filePath: string) {
+      const s: string = (fs.readFileSync(filePath)).toString();
+      this.FromString(s);
    }
 }
