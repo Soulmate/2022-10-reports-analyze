@@ -27,6 +27,8 @@ export class BinarySaver {
             stream.write(uint8Array, (err) => err ? reject(err) : resolve()));
          await promise;
 
+         value[1] = [];
+
          // console.log('Binary file appended', key);
       }
    }
