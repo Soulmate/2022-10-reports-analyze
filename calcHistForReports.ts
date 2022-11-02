@@ -219,7 +219,7 @@ async function DownloadAndAnalyzeObject(report) {
                }
 
                AddDataToHistograms(src_last_modified, src_size, migration_timestamp);
-               // binarySaver.AddBinaryValues(migrationId, src_last_modified, src_size, migration_timestamp);
+               binarySaver.AddBinaryValues(migrationId, src_last_modified, src_size, migration_timestamp);
             })
             .on('end', function () {
                resolve(migrationId);
