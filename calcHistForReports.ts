@@ -1,12 +1,15 @@
 import { parse } from 'csv-parse';
 import { Histogram } from "./Histogram";
+import { BinarySaver } from "./BinarySaver";
+import { Console } from 'console';
 
 const fs = require('fs');
 
 const TEST_CUT = false; // pick only part of objects
 
+const MAX_SIZE_TB = 5; // maximum object size to consider
 
-const SAVE_EVERY_N = 100; // every Nth object save current historgams
+const SAVE_EVERY_N = 1; // every Nth object save current histograms
 const MS_IN_DAY = 24 * 60 * 60 * 1000;
 const CURRENT_TIME_STAMP = Date.now();
 
@@ -22,6 +25,9 @@ const histAgeDaysAtMigrationObjNumber = new Histogram(0, maxAgeDays, binSizeDays
 const histAgeDaysAtNowSize = new Histogram(0, maxAgeDays, binSizeDays);
 const histAgeDaysAtMigrationSize = new Histogram(0, maxAgeDays, binSizeDays);
 
+// for saving binary aggregated data
+const binarySaver = new BinarySaver();
+
 function AddDataToHistograms(src_last_modified_timestamp: number, src_size: number, migration_timestamp: number) {
    let objAgeDaysAtNow: number = (CURRENT_TIME_STAMP - src_last_modified_timestamp) / MS_IN_DAY;
    let objAgeDaysAtMigration: number = (migration_timestamp - src_last_modified_timestamp) / MS_IN_DAY;
@@ -32,8 +38,7 @@ function AddDataToHistograms(src_last_modified_timestamp: number, src_size: numb
    // console.log({src_last_modified_timestamp, src_size, migration_timestamp, objAgeDaysAtNow, objAgeDaysAtMigration});
 }
 
-function SaveHistograms() {
-   console.log('Saving histograms:');
+function SaveHistograms() {   
    histAgeDaysAtNowObjNumber.SaveToFile('output/histAgeDaysAtNowObjNumber.dat');
    histAgeDaysAtMigrationObjNumber.SaveToFile('output/histAgeDaysAtMigrationObjNumber.dat');
    histAgeDaysAtNowSize.SaveToFile('output/histAgeDaysAtNowSize.dat');
@@ -75,6 +80,7 @@ const listAllKeys = (params, out = []) => new Promise((resolve, reject) => {
 });
 
 async function DownloadAndAnalyzeAllObjects() {
+
    let reportsList: any[];
 
    let cachedListAllKeys = cache.getKey('reportsList');
@@ -113,15 +119,26 @@ async function DownloadAndAnalyzeAllObjects() {
 
       let migrationId = await DownloadAndAnalyzeObject(reportsList[i]);
 
-      // console.log(`${new Date()}\t${i}/${reportsList.length}\tloaded migrationId\t${migrationId}`);
+      console.log(`${new Date()}\t${i}/${reportsList.length}\tloaded and analyzed migrationId\t${migrationId}`);
 
       if (i % SAVE_EVERY_N == 0) {
+         console.log('Saving histograms:');   
          SaveHistograms();
+         console.log('Saving histograms done');
+         console.log('Binary files append started:')
+         await binarySaver.WriteBinaryValues();
+         console.log('Binary files append done')
+
          fs.writeFileSync('output/lastProcessedReport.txt', String(i));
       }
    }
 
+   console.log('Saving histograms:');   
    SaveHistograms();
+   console.log('Saving histograms done');
+   console.log('Binary files append started:')
+   await binarySaver.WriteBinaryValues();
+   console.log('Binary files append done')
 }
 
 async function DownloadAndAnalyzeObject(report) {
@@ -138,7 +155,7 @@ async function DownloadAndAnalyzeObject(report) {
    };
 
    try {
-      return await new Promise(function (resolve, reject) {
+      return await new Promise<number>(function (resolve, reject) {
          s3.getObject(options).createReadStream()
             .pipe(parse({ delimiter: ',', from: 2 }))
             .on('data', function (row) {
@@ -147,6 +164,11 @@ async function DownloadAndAnalyzeObject(report) {
                let src_last_modified: number = Date.parse(row[6]); // format: 12:17:24 2022-07-15 GMT                    
                let decision: string = row[32];
                let result: string = row[33];
+
+               if (src_size > MAX_SIZE_TB * 1e12) {
+                  console.log('MAX_SIZE_TB exceeded', src_size, {}, row, objKey);
+                  return;
+               }
 
                switch (migration_type) {
                   case 'single':
@@ -197,6 +219,7 @@ async function DownloadAndAnalyzeObject(report) {
                }
 
                AddDataToHistograms(src_last_modified, src_size, migration_timestamp);
+               // binarySaver.AddBinaryValues(migrationId, src_last_modified, src_size, migration_timestamp);
             })
             .on('end', function () {
                resolve(migrationId);
@@ -209,9 +232,13 @@ async function DownloadAndAnalyzeObject(report) {
    }
 }
 
+
+
+// MAIN FLOW:
 var dir = './output';
 if (!fs.existsSync(dir)) {
    fs.mkdirSync(dir);
 }
 
 DownloadAndAnalyzeAllObjects();
+binarySaver.CloseAllBinaryStreams()
