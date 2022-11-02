@@ -89,7 +89,7 @@ export class Histogram {
    async SaveToFile(filePath: string) {
       try {
          fs.writeFileSync(filePath, this.ToString());
-         console.log(`File written successfully ${filePath}`);
+         // console.log(`File written successfully ${filePath}`);
       }
       catch (err) {
          console.log(err);

@@ -122,23 +122,23 @@ async function DownloadAndAnalyzeAllObjects() {
       console.log(`${new Date()}\t${i}/${reportsList.length}\tloaded and analyzed migrationId\t${migrationId}`);
 
       if (i % SAVE_EVERY_N == 0) {
-         console.log('Saving histograms:');   
+         // console.log('Saving histograms:');   
          SaveHistograms();
-         console.log('Saving histograms done');
-         console.log('Binary files append started:')
+         // console.log('Saving histograms done');
+         // console.log('Binary files append started:')
          await binarySaver.WriteBinaryValues();
-         console.log('Binary files append done')
+         // console.log('Binary files append done')
 
          fs.writeFileSync('output/lastProcessedReport.txt', String(i));
       }
    }
 
-   console.log('Saving histograms:');   
+   // console.log('Saving histograms:');   
    SaveHistograms();
-   console.log('Saving histograms done');
-   console.log('Binary files append started:')
+   // console.log('Saving histograms done');
+   // console.log('Binary files append started:')
    await binarySaver.WriteBinaryValues();
-   console.log('Binary files append done')
+   // console.log('Binary files append done')
 }
 
 async function DownloadAndAnalyzeObject(report) {
