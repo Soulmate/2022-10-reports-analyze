@@ -13,7 +13,7 @@ export class BinarySaver {
          console.log(`New binary file ${migrationId}`);
       }
       this.listOfStreams[migrationId][1].push([src_last_modified, src_size, migration_timestamp]);
-      console.log('AddBinaryValues',this.listOfStreams[migrationId][1].length);
+      // console.log('AddBinaryValues',this.listOfStreams[migrationId][1].length);
    }
    async WriteBinaryValues() {
       for (let [key, value] of Object.entries(this.listOfStreams)) {
