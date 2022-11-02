@@ -17,7 +17,7 @@ export class BinarySaver {
    }
    async WriteBinaryValues() {
       for (let [key, value] of Object.entries(this.listOfStreams)) {
-         console.log(`Writing stream ${key}`);
+         // console.log(`Writing stream ${key}`);
 
          const stream = (value[0] as fs.WriteStream);
          const arr = (value[1] as number[]);
@@ -28,6 +28,7 @@ export class BinarySaver {
          let promise = new Promise<void>((resolve, reject) =>
             stream.write(uint8Array, (err) => err ? reject(err) : resolve()));
          await promise;
+         
          // console.log('Binary file appended', key);
       }
    }
