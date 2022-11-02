@@ -1,6 +1,4 @@
-import { rejects } from "assert";
 import * as fs from "fs";
-import { resolve } from "path";
 
 export class BinarySaver {
    listOfStreams = {};
@@ -12,7 +10,7 @@ export class BinarySaver {
          ];
          console.log(`New binary file ${migrationId}`);
       }
-      this.listOfStreams[migrationId][1].push([src_last_modified, src_size, migration_timestamp]);
+      this.listOfStreams[migrationId][1].push(src_last_modified, src_size, migration_timestamp);
       // console.log('AddBinaryValues',this.listOfStreams[migrationId][1].length);
    }
    async WriteBinaryValues() {
@@ -28,7 +26,7 @@ export class BinarySaver {
          let promise = new Promise<void>((resolve, reject) =>
             stream.write(uint8Array, (err) => err ? reject(err) : resolve()));
          await promise;
-         
+
          // console.log('Binary file appended', key);
       }
    }
@@ -37,7 +35,7 @@ export class BinarySaver {
          console.log(`Closing stream ${key}`);
 
          const stream = (value[0] as fs.WriteStream);
-         
+
          let promise = new Promise<void>((resolve, reject) =>
             stream.end(() => resolve()));
          await promise;
@@ -45,3 +43,14 @@ export class BinarySaver {
       }
    }
 }
+
+// async function test() {
+//    const bs = new BinarySaver();
+//    bs.AddBinaryValues(147, 123, 456, 789);
+//    bs.AddBinaryValues(147, 123, 456, 789);
+//    bs.AddBinaryValues(147, 123, 456, 789);
+//    await bs.WriteBinaryValues();
+//    await bs.CloseAllBinaryStreams();
+// }
+
+// test() 
